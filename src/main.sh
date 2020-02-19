@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ex
+
 function stripColors {
   echo "${1}" | sed 's/\x1b\[[0-9;]*m//g'
 }
@@ -13,6 +15,17 @@ function hasPrefix {
       false
       ;;
   esac
+}
+
+function getChangedDirectoriesJson {
+  prFilesUrl="$(cat ${GITHUB_EVENT_PATH} | jq -r '.pull_request._links.self.href')/files"
+  changedDirectories=
+  while [ "${prFilesUrl}" != "" ]; do
+    changedDirectories="$(printf "${changedDirectories}\n$(curl -fSsL -H "Authorization: token ${GITHUB_TOKEN}" "${prFilesUrl}" | jq -cMr '.[].filename' | awk '/\// { sub(/\/?[^\/]+$/, "", $0); print "\"" $0 "\"" }')\n" | sort | uniq)"
+    responseHeaders="$(curl -IfSsL -H "Authorization: token ${GITHUB_TOKEN}" "${prFilesUrl}" | sed -ne '/^Link/p')"
+    prFilesUrl="$(echo "${responseHeaders}" | sed -Ene '/^Link:/ s/^.*\<([^\>]+)\>\; rel="next".*$/\1/gp')"
+  done
+  echo "${changedDirectories}" | jq -rscM 'unique'
 }
 
 function parseInputs {
@@ -29,12 +42,6 @@ function parseInputs {
   else
     echo "Input terraform_subcommand cannot be empty"
     exit 1
-  fi
-
-  # Optional inputs
-  tfWorkingDir="."
-  if [ "${INPUT_TF_ACTIONS_WORKING_DIR}" != "" ] || [ "${INPUT_TF_ACTIONS_WORKING_DIR}" != "." ]; then
-    tfWorkingDir=${INPUT_TF_ACTIONS_WORKING_DIR}
   fi
 
   tfComment=0
@@ -106,47 +113,50 @@ function main {
   source ${scriptDir}/terraform_taint.sh
 
   parseInputs
+  tfChangedPaths="$(getChangedDirectoriesJson)"
   configureCLICredentials
-  cd ${GITHUB_WORKSPACE}/${tfWorkingDir}
+  installTerraform
 
-  case "${tfSubcommand}" in
-    fmt)
-      installTerraform
-      terraformFmt ${*}
-      ;;
-    init)
-      installTerraform
-      terraformInit ${*}
-      ;;
-    validate)
-      installTerraform
-      terraformValidate ${*}
-      ;;
-    plan)
-      installTerraform
-      terraformPlan ${*}
-      ;;
-    apply)
-      installTerraform
-      terraformApply ${*}
-      ;;
-    output)
-      installTerraform
-      terraformOutput ${*}
-      ;;
-    import)
-      installTerraform
-      terraformImport ${*}
-      ;;
-    taint)
-      installTerraform
-      terraformTaint ${*}
-      ;;
-    *)
-      echo "Error: Must provide a valid value for terraform_subcommand"
-      exit 1
-      ;;
-  esac
+  for changedPath in $(echo "${tfChangedPaths}" | jq '.[] | @base64'); do
+    _jq() {
+     echo "${changedPath}" | base64 -d
+    }
+
+    if [ -e "$(_jq)/backend.tf" ]; then
+      case "${tfSubcommand}" in
+        fmt)
+          (cd "$(_jq)" && terraformFmt)
+          ;;
+        init)
+          (cd "$(_jq)" && terraformInit)
+          ;;
+        validate)
+          (cd "$(_jq)" && terraformValidate)
+          ;;
+        plan)
+          (cd "$(_jq)" && terraformPlan)
+          ;;
+        apply)
+          (cd "$(_jq)" && terraformApply)
+          ;;
+        output)
+          (cd "$(_jq)" && terraformOutput)
+          ;;
+        import)
+          (cd "$(_jq)" && terraformImport)
+          ;;
+        taint)
+          (cd "$(_jq)" && terraformTaint)
+          ;;
+        *)
+          echo "Error: Must provide a valid value for terraform_subcommand"
+          exit 1
+          ;;
+      esac
+    else
+      echo "INFO No Terraform module found at $(_jq)" >&2
+    fi
+  done
 }
 
-main "${*}"
+main

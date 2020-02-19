@@ -1,9 +1,10 @@
 #!/bin/bash
 
 function terraformPlan {
+  tfWorkingDir="$(pwd)"
   # Gather the output of `terraform plan`.
   echo "plan: info: planning Terraform configuration in ${tfWorkingDir}"
-  planOutput=$(terraform plan -detailed-exitcode -input=false ${*} 2>&1)
+  planOutput=$(terraform plan -detailed-exitcode -input=false 2>&1)
   planExitCode=${?}
   planHasChanges=false
   planCommentStatus="Failed"
@@ -44,7 +45,7 @@ function terraformPlan {
 
   # Comment on the pull request if necessary.
   if [ "$GITHUB_EVENT_NAME" == "pull_request" ] && [ "${tfComment}" == "1" ] && ([ "${planHasChanges}" == "true" ] || [ "${planCommentStatus}" == "Failed" ]); then
-    planCommentWrapper="#### \`terraform plan\` ${planCommentStatus}
+    planCommentWrapper="#### \`terraform plan\` ${planCommentStatus} in ${tfWorkingDir}
 <details><summary>Show Output</summary>
 
 \`\`\`

@@ -1,9 +1,10 @@
 #!/bin/bash
 
 function terraformValidate {
+  tfWorkingDir="$(pwd)"
   # Gather the output of `terraform validate`.
   echo "validate: info: validating Terraform configuration in ${tfWorkingDir}"
-  validateOutput=$(terraform validate ${*} 2>&1)
+  validateOutput=$(terraform validate 2>&1)
   validateExitCode=${?}
 
   # Exit code of 0 indicates success. Print the output and exit.
@@ -21,7 +22,7 @@ function terraformValidate {
 
   # Comment on the pull request if necessary.
   if [ "$GITHUB_EVENT_NAME" == "pull_request" ] && [ "${tfComment}" == "1" ]; then
-    validateCommentWrapper="#### \`terraform validate\` Failed
+    validateCommentWrapper="#### \`terraform validate\` Failed in ${tfWorkingDir}
 
 \`\`\`
 ${validateOutput}

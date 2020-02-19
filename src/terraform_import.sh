@@ -1,9 +1,10 @@
 #!/bin/bash
 
 function terraformImport {
+  tfWorkingDir="$(pwd)"
   # Gather the output of `terraform import`.
   echo "import: info: importing Terraform configuration in ${tfWorkingDir}"
-  importOutput=$(terraform import -input=false ${*} 2>&1)
+  importOutput=$(terraform import -input=false 2>&1)
   importExitCode=${?}
   importCommentStatus="Failed"
 
@@ -24,7 +25,7 @@ function terraformImport {
 
   # Comment on the pull request if necessary.
   if [ "$GITHUB_EVENT_NAME" == "pull_request" ] && [ "${tfComment}" == "1" ] && [ "${importCommentStatus}" == "Failed" ]; then
-    importCommentWrapper="#### \`terraform import\` ${importCommentStatus}
+    importCommentWrapper="#### \`terraform import\` ${importCommentStatus} in ${tfWorkingDir}
 <details><summary>Show Output</summary>
 
 \`\`\`

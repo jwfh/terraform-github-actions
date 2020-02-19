@@ -1,9 +1,10 @@
 #!/bin/bash
 
 function terraformInit {
+  tfWorkingDir="$(pwd)"
   # Gather the output of `terraform init`.
   echo "init: info: initializing Terraform configuration in ${tfWorkingDir}"
-  initOutput=$(terraform init -input=false ${*} 2>&1)
+  initOutput=$(terraform init -input=false 2>&1)
   initExitCode=${?}
 
   # Exit code of 0 indicates success. Print the output and exit.
@@ -21,7 +22,7 @@ function terraformInit {
 
   # Comment on the pull request if necessary.
   if [ "$GITHUB_EVENT_NAME" == "pull_request" ] && [ "${tfComment}" == "1" ]; then
-    initCommentWrapper="#### \`terraform init\` Failed
+    initCommentWrapper="#### \`terraform init\` Failed in ${tfWorkingDir}
 
 \`\`\`
 ${initOutput}
